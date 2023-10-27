@@ -9,8 +9,9 @@ PyQt5==5.9
 pyqtgraph==0.10.0
 python-dateutil==2.6.1
 pytz==2017.2
-pyuff==1.1
+pyuff @ git+https://github.com/kb-/pyuff.git@main
 QtAwesome==0.4.4
 QtPy==1.2.1
 sip==4.19.3
 six==1.10.0
+matplotlib

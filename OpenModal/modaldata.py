@@ -739,95 +739,61 @@ class ModalDataUff(object):
             self.tables['measurement_values'] = dlist
 
         return True
-    
+
     def getlocalcs(self, model_id, model):
         '''Read cs fields and convert all to euler angels.'''
 
-        mnums = np.nonzero(self.uff_types[model]==2420)[0]
-        # mnums.extend(list(np.nonzero(self.uff_types==18)[0]))
+        mnums = np.nonzero(self.uff_types[model] == 2420)[0]
         mnums.sort()
-
         mnums += model[0]
 
         if len(mnums) == 0:
             return False
 
-        # So ... the cs come in different flavours. One is simply the three
-        #   vectors defining the axes.
-        # self.localcs = pd.DataFrame(columns=['model_id', 'uffidcs', 'node_nums', 'x1', 'x2', 'x3',
-        #                                      'y1', 'y2', 'y3',
-        #                                      'z1', 'z2', 'z3'])
-
-        # ... another one is the three euler angles, using axes z, y' and x''. This is
-        #       what LMS test lab uses internally. Perhaps there is a uff field with
-        #       this data but i havent searched yet.
-        # self.localeul = pd.DataFrame(columns=['model_id', 'uffidcs', 'node_nums', 'thx', 'thy', 'thz'])
-
-        # ... what is left is a cumbersome definition (data set #18) with the point of origin,
-        #       a point on the x axis and then another point on the xz plane :S
-        # Am thinking about just converting this one directly, no sense in creating another pandas
-        #   table -- who will use this definition?
-
-        
-        mlist = []
         for mnum in mnums:
             sdata = self.uff_object.read_sets(mnum)
-            
-            leu = pd.DataFrame(columns=['model_id', 'uffidcs', 'node_nums', 'thx', 'thy', 'thz'])
-            lcs = pd.DataFrame(columns=['model_id', 'uffidcs', 'node_nums', 'x1','x2','x3',
-                                             'y1','y2','y3',
-                                             'z1','z2','z3'])
 
-            # # So the wors case scenario is we have a #18 field. It may be
-            # #   a good idea to first calculate local coordinate axes.
-            # if sdata['type'] == 18:
-            #     # x-axis
-            #     x = np.linalg.norm(sdata['x_point']-sdata['ref_o'])
-            #
-            #     # y-axis
+            cs_labels = sdata['CS_sys_labels']
 
+            leu = pd.DataFrame(index=cs_labels,
+                               columns=['model_id', 'uffidcs', 'node_nums', 'thx',
+                                        'thy', 'thz'])
+            lcs = pd.DataFrame(index=cs_labels,
+                               columns=['model_id', 'uffidcs', 'node_nums', 'x1', 'x2',
+                                        'x3', 'y1', 'y2', 'y3', 'z1', 'z2', 'z3'])
 
+            leu['node_nums'] = cs_labels
+            lcs['node_nums'] = cs_labels
 
-            lcs['node_nums'] = sdata['CS_sys_labels']
-            leu['node_nums'] = sdata['CS_sys_labels']
-            
-            # .. First calculate euler angles.
-            #     (see http://nghiaho.com/?page_id=846)
+            # Calculating euler angles
             thx = []
             thy = []
             thz = []
             for r in sdata['CS_matrices']:
-                thx.append(-np.arctan2(r[2,1],r[2,2])) # added minus so that behaviour is consistent with LMS
-                thy.append(np.arctan2(-r[2,0], np.sqrt(r[2,1]**2+r[2,2]**2)))
-                thz.append(np.arctan2(r[1,0], r[0,0]))
+                thx.append(-np.arctan2(r[2, 1], r[2, 2]))
+                thy.append(np.arctan2(-r[2, 0], np.sqrt(r[2, 1] ** 2 + r[2, 2] ** 2)))
+                thz.append(np.arctan2(r[1, 0], r[0, 0]))
 
-                
-            leu['thx'] = np.asarray(thx)*180./np.pi
-            leu['thy'] = np.asarray(thy)*180./np.pi
-            leu['thz'] = np.asarray(thz)*180./np.pi
-            
-            # .. Also save local cs.
+            leu['thx'] = np.asarray(thx) * 180. / np.pi
+            leu['thy'] = np.asarray(thy) * 180. / np.pi
+            leu['thz'] = np.asarray(thz) * 180. / np.pi
+
+            # Saving local cs
             arr = np.array(sdata['CS_matrices']).ravel()
-            lcs['x1'] = arr[::9]
-            lcs['x2'] = arr[1::9]
-            lcs['x3'] = arr[2::9]
-            lcs['y1'] = arr[3::9]
-            lcs['y2'] = arr[4::9]
-            lcs['y3'] = arr[5::9]
-            lcs['z1'] = arr[6::9]
-            lcs['z2'] = arr[7::9]
-            lcs['z3'] = arr[8::9]
-            
+            for idx, cs_label in enumerate(cs_labels):
+                lcs.loc[cs_label, ['x1', 'x2', 'x3', 'y1', 'y2', 'y3', 'z1', 'z2',
+                                   'z3']] = arr[idx * 9:(idx + 1) * 9]
+
             lcs['uffidcs'] = mnum
             leu['uffidcs'] = mnum
 
             lcs['model_id'] = model_id
             leu['model_id'] = model_id
-            
+
             self.localcs = self.localcs.append(lcs)
             self.localeul = self.localeul.append(leu)
-            
-            return True
+
+        return True
             
 
     def gen_geometry_table(self, model_id, model):
@@ -877,7 +843,7 @@ class ModalDataUff(object):
         # TODO: Leave this for the end, when all models are scaned? Or maybe not!!
         if cspresent:
             dlist = pd.merge(dlist, self.localeul, on=['node_nums', 'model_id'])[['model_id', 'uffid', 'node_nums', 'x', 'y', 'z',
-                                                                                                  'thx', 'thy', 'thz']].sort(['uffid'])
+                                                                                                  'thx', 'thy', 'thz']].sort_values(by=['uffid'])
 #             self.geometry = pd.merge(self.geometry, self.localeul, on='node_nums')[['uffid', 'nodenums', 'x', 'y', 'z',
 #                                                                            'thx', 'thy', 'thz']].sort(['mnum'])
         else:
